@@ -6,8 +6,26 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Initialize Groq client
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+# Get API key from environment variable or Streamlit secrets
+def get_api_key():
+    # First try to get from Streamlit secrets (for cloud deployment)
+    try:
+        return st.secrets["GROQ_API_KEY"]
+    except:
+        # If not in Streamlit secrets, try environment variable (for local development)
+        return os.getenv("GROQ_API_KEY")
+
+# Initialize Groq client with error handling
+try:
+    api_key = get_api_key()
+    if not api_key:
+        st.error("No API key found. Please set the GROQ_API_KEY in your environment or Streamlit secrets.")
+        st.stop()
+    
+    client = Groq(api_key=api_key)
+except Exception as e:
+    st.error(f"Error initializing Groq client: {str(e)}")
+    st.stop()
 
 # Set page config
 st.set_page_config(
@@ -43,22 +61,25 @@ if prompt := st.chat_input("What would you like to know?"):
     # Display assistant response
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
-        full_response = ""
         
-        # Get response from Groq
-        chat_completion = client.chat.completions.create(
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
-            model="deepseek-r1-distill-llama-70b",
-        )
-        
-        # Display the response
-        response = chat_completion.choices[0].message.content
-        message_placeholder.markdown(response)
-    
-    # Add assistant response to chat history
-    st.session_state.messages.append({"role": "assistant", "content": response}) 
+        try:
+            # Get response from Groq
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+                model="deepseek-r1-distill-llama-70b",
+            )
+            
+            # Display the response
+            response = chat_completion.choices[0].message.content
+            message_placeholder.markdown(response)
+            
+            # Add assistant response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": response})
+        except Exception as e:
+            error_message = f"Error: {str(e)}"
+            message_placeholder.error(error_message) 
